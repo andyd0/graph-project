@@ -11,6 +11,8 @@ using namespace std;
 void swap(char *a, char *b);
 void permutations(char *input, int l, int r, int &j, vector<vector<int> > &permute_list);
 int factorial(int n);
+// vector<vector<int> > shortest_list(vector<vector<int> > permute_list, int **cities);
+int check_graph(vector<int> path, int **cities);
 
 int main(int argc, char *argv[]) {
 
@@ -58,6 +60,10 @@ int main(int argc, char *argv[]) {
     permutations(numbers, 0, n - 2, j, permute_list);
 
     printf("fact: %d, size: %d, index: %d\n", fact, static_cast<int>(permute_list.size()), j);
+
+    static const int arr[] = {0, 1, 2, 3, 4};
+    vector<int> test (arr, arr + sizeof(arr) / sizeof(arr[0]) );
+    printf("%d\n", check_graph(test, cities));
 }
 
 void swap(char *a, char *b) {
@@ -80,7 +86,8 @@ void permutations(char *input, int l, int r, int &j, vector<vector<int> > &permu
 
     if(l == r) {
         vector<int> temp(n);
-        for(int i = 0; i < n; i++)
+        temp.at(0) = 0;
+        for(int i = 1; i < n; i++)
             temp.at(i) = input[i];
         permute_list.at(j) = temp;
         j++;
@@ -93,4 +100,26 @@ void permutations(char *input, int l, int r, int &j, vector<vector<int> > &permu
     }
 };
 
+// vector<vector<int> > shortest_list(vector<vector<int> > permute_list, int **cities) {
 
+//     int min = -1;
+
+
+// }
+
+int check_graph(vector<int> path, int **cities) {
+
+    int path_sum = 0;
+    int path_size = path.size();
+    int i = 0;
+    int j = 1;
+
+    while(j < path_size) {
+        printf("%d\n", cities[i][j]);
+        path_sum += cities[i][j];      
+        i++;
+        j++;
+    }
+
+    return path_sum;
+}
