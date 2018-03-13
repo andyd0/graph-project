@@ -39,25 +39,17 @@ int main(int argc, char *argv[]) {
 	}
 
 	int fact = factorial(n);
-
-	char *numbers = new char[n];
-	for (int i = 0; i < (n - 1); i++) {
-		numbers[i] = (i + 1) + '0';
-	}
-	numbers[n - 1] = 0;
-
 	int cost = INT_MAX;
 	vector<int> shortest_path(n, 0);
-	int i, j;
 
 	omp_set_num_threads(threads);
 	// # pragma omp parallel num_threads(16) default(none) shared(cost, fact, cities, shortest_path, n) private(permutation, i, j)
 	// {
 	# pragma omp parallel for
-	for(i = 0; i < fact; i++) {
+	for(int i = 0; i < fact; i++) {
 		// printf("index: %d and thread number %d\n", i, omp_get_thread_num());
 		vector<int> permutation = ithPermutation(n , i);
-		for (j = 0; j < n; j++) {
+		for (int j = 0; j < n; j++) {
 			int temp = check_graph(permutation, cities, cost);
 			if (cost > temp) {
 				cost = temp;
