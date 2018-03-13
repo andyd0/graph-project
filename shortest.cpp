@@ -10,9 +10,8 @@
 using namespace std;
 
 int factorial(int n);
-void shortest_list(vector<vector<int> > permute_list, int **cities);
+vector<int> permutationAtith(const int n, int i);
 int check_graph(vector<int> path, int **cities, int min);
-vector<int> ithPermutation(const int n, int i);
 
 int main(int argc, char *argv[]) {
 
@@ -21,6 +20,7 @@ int main(int argc, char *argv[]) {
 		exit(0);
 	}
 
+	// ADD TRY ERROR
 	int n = atoi(argv[1]);
 	int threads = atoi(argv[2]);
 
@@ -32,6 +32,7 @@ int main(int argc, char *argv[]) {
 
 	ifstream inputFile(argv[3]);
 
+	// ADD TRY ERROR
 	for (int i = 0; i < n; i++) {
 		for (int j = 0; j < n; j++) {
 			inputFile >> cities[i][j];
@@ -48,7 +49,7 @@ int main(int argc, char *argv[]) {
 	# pragma omp parallel for
 	for(int i = 0; i < fact; i++) {
 		// printf("index: %d and thread number %d\n", i, omp_get_thread_num());
-		vector<int> permutation = ithPermutation(n , i);
+		vector<int> permutation = permutationAtith(n , i);
 		for (int j = 0; j < n; j++) {
 			int temp = check_graph(permutation, cities, cost);
 			if (cost > temp) {
@@ -63,7 +64,6 @@ int main(int argc, char *argv[]) {
 	for (int x : shortest_path)
 		printf("%d ", x);
 	printf("\ntotal weight = %d\n", cost);
-
 }
 
 
@@ -75,7 +75,7 @@ int factorial(int n) {
 }
 
 
-vector<int> ithPermutation(const int n, int i)
+vector<int> permutationAtith(const int n, int i)
 {
    int j, k = 0;
    vector<int> factorials(n);
