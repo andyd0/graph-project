@@ -12,8 +12,9 @@ using namespace std;
 void swap(char *a, char *b);
 void permutations(char *input, int l, int r, int n, int &j, vector<vector<int> > &permute_list);
 int factorial(int n);
-void shortest_list(vector<vector<int> > permute_list, int **cities);
+void shortest_list(vector<vector<int> > permute_list, int **cities, int threads);
 int check_graph(vector<int> path, int **cities, int min);
+vector<int> ithPermutation(const int n, int i);
 
 int main(int argc, char *argv[]) {
 
@@ -24,8 +25,6 @@ int main(int argc, char *argv[]) {
 
 	int n = atoi(argv[1]);
 	int threads = atoi(argv[2]);
-
-	printf("n: %d and threads: %d\n", n, threads);
 
 	int **cities = new int*[n];
 	for (int i = 0; i < n; i++)
@@ -41,13 +40,6 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	for (int i = 0; i < n; i++) {
-		for (int j = 0; j < n; j++) {
-			cout << cities[i][j] << " ";
-		}
-		cout << endl;
-	}
-
 	int fact = factorial(n);
 	vector<vector<int> > permute_list(fact, vector<int>(n - 1, 0));
 
@@ -57,13 +49,15 @@ int main(int argc, char *argv[]) {
 	}
 	numbers[n - 1] = 0;
 
-	int j = 0;
-	permutations(numbers, 0, n - 2, n, j, permute_list);
+	omp_set_num_threads(threads);
+	# pragma omp parallel for
+	for(int i = 0; i < fact; i++) {
+		permute_list.at(i) = ithPermutation(n , i);
+	}
 
-	printf("fact: %d, size: %d, index: %d\n", fact, static_cast<int>(permute_list.size()), j);
-
-	shortest_list(permute_list, cities);
+	shortest_list(permute_list, cities, threads);
 }
+
 
 void swap(char *a, char *b) {
 	char temp;
@@ -72,6 +66,7 @@ void swap(char *a, char *b) {
 	*b = temp;
 }
 
+
 int factorial(int n) {
 	int value = 1;
 	for (int i = n - 1; i > 1; i--)
@@ -79,32 +74,46 @@ int factorial(int n) {
 	return value;
 }
 
-void permutations(char *input, int l, int r, int n, int &j, vector<vector<int> > &permute_list) {
 
-	if (l == r) {
-		vector<int> temp(n);
-		temp.at(0) = 0;
-		for (int i = 0; i < n - 1; i++)
-			temp.at(i + 1) = input[i] - '0';
-		permute_list.at(j) = temp;
-		j++;
-	}
-	else {
-		for (int i = l; i <= r; i++) {
-			swap((input + l), (input + i));
-			permutations(input, l + 1, r, n, j, permute_list);
-			swap((input + l), (input + i));
-		}
-	}
-};
+vector<int> ithPermutation(const int n, int i)
+{
+   int j, k = 0;
+   vector<int> factorials(n);
+   vector<int> permutation(n);
+
+   // compute factorial numbers
+   factorials.at(k) = 1;
+   while (++k < n)
+      factorials.at(k) = factorials.at(k - 1) * k;
+
+   // compute factorial code
+   for (k = 1; k < n; ++k)
+   {
+      permutation.at(k) = i / factorials.at(n - 1 - k);
+      i = i % factorials.at(n - 1 - k);
+   }
+
+   // readjust values to obtain the permutation
+   // start from the end and check if preceding values are lower
+   for (k = n - 1; k > 0; --k)
+      for (j = k - 1; j >= 0; --j)
+         if (permutation.at(j) <= permutation.at(k))
+            permutation.at(k)++;
+	
+   	return permutation;
+}
 
 
-void shortest_list(vector<vector<int> > permute_list, int **cities) {
+void shortest_list(vector<vector<int> > permute_list, int **cities, int threads) {
 
 	vector<int> shortest_path;
 	int cost = INT_MAX;
+	int n = permute_list.size();
+	int i;
 
-	for (size_t i = 0; i < permute_list.size(); i++) {
+	omp_set_num_threads(threads);
+	# pragma omp parallel for
+	for (i = 0; i < n; i++) {
 		int temp = check_graph(permute_list.at(i), cities, cost);
 		if (cost > temp) {
 			cost = temp;
@@ -132,6 +141,7 @@ int check_graph(vector<int> path, int **cities, int cost) {
 		j = path[y];
 		path_sum += cities[i][j];
 		if (path_sum > cost) {
+			path_sum = INT_MAX;
 			break;
 		}
 		x++;
