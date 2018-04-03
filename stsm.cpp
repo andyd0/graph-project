@@ -63,7 +63,6 @@ int main(int argc, char *argv[]) {
 	// # pragma omp parallel for
 	for (int i = 0; i < length; i++) {
 		int temp = check_graph(permute_list.at(i), cities, cost);
-		printf("%d\n", temp);
 		if (cost > temp) {
 			cost = temp;
 			shortest_path = permute_list.at(i);
