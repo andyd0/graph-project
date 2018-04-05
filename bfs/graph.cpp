@@ -22,6 +22,10 @@ void Graph::generate(std::ifstream &inputFile) {
 	}
 }
 
+int Graph::vertexCount() {
+	return V;
+}
+
 void Graph::addEdge(int v, int w) {
 	adj[v].push_back(w);
 }
