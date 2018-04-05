@@ -18,7 +18,7 @@ int* BFS(Graph G, int V, int r) {
 	std::queue<int> nextQueue;
 
 	while (!currentQueue.empty()) {
-		nextQueue = queue<int>();
+		nextQueue = std::queue<int>();
 		while (!currentQueue.empty()) {
 			int u = currentQueue.front();
 			currentQueue.pop();
