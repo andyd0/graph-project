@@ -2,32 +2,26 @@
 #include <stdlib.h>
 #include <math.h>
 
-/*** Skeleton for Lab 1 ***/
 
 /***** Globals ******/
 float **a; /* The coefficients */
 float *x;  /* The unknowns */
 float *b;  /* The constants */
 float err; /* The absolute relative error */
+int nit = 0; /* number of iterations */
 int num = 0;  /* number of unknowns */
 
 
-/****** Function declarations */
+			  /****** Function declarations ******/
 void check_matrix(); /* Check whether the matrix will converge */
 void get_input();  /* Read input from file */
+void find_solution(); /* Does matrix vector multiplication to find solution */
 
-/********************************/
-
-
-
-/* Function definitions: functions are ordered alphabetically ****/
-/*****************************************************************/
-
-/*
-Conditions for convergence (diagonal dominance):
-1. diagonal element >= sum of all other elements of the row
-2. At least one diagonal element > sum of all other elements of the row
-*/
+					  /*
+					  Checks to see if the given matrix will (diagonal dominance):
+					  1. diagonal element >= sum of all other elements of the row
+					  2. At least one diagonal element > sum of all other elements of the row
+					  */
 void check_matrix()
 {
 	int bigger = 0; /* Set to 1 if at least one diag element > sum  */
@@ -65,10 +59,10 @@ void check_matrix()
 
 /******************************************************/
 /* Read input from file */
-/* After this function returns:
-* a[][] will be filled with coefficients and you can access them using a[i][j] for element (i,j)
+/* Function will have initialized the following:
+* a[][] matrix will be filled with coefficients
 * x[] will contain the initial values of x
-* b[] will contain the constants (i.e. the right-hand-side of the equations
+* b[] will contain the constants
 * num will have number of variables
 * err will have the absolute error that you need to reach
 */
@@ -136,24 +130,50 @@ void get_input(char filename[])
 	}
 
 	fclose(fp);
-
 }
 
+void find_solution()
+{
+	int passed = 0;
+	float *new_x = (float *)malloc(num * sizeof(float));
 
-/************************************************************/
+	while (passed < num)
+	{
+		passed = 0;
+		for (int i = 0; i < num; i++)
+		{
+			float constant = b[i];
+			float solution = x[i];
+			float temp = 0.0;
+			float divisor = a[i][i];
 
+			for (int j = 0; j < num; j++)
+			{
+				if (j != i)
+				{
+					temp += (a[i][j] * x[j]);
+				}
+			}
+			new_x[i] = (constant - temp) / divisor;
+		}
+		for (int i = 0; i < num; i++)
+		{
+			if (fabs((new_x[i] - x[i]) / new_x[i]) <= err) passed++;
+			x[i] = new_x[i];
+		}
+		nit++;
+	}
+}
 
 int main(int argc, char *argv[])
 {
-
 	int i;
-	int nit = 0; /* number of iterations */
 	FILE * fp;
 	char output[100] = "";
 
 	if (argc != 2)
 	{
-		printf("Usage: ./gsref filename\n");
+		printf("Usage: ./gsc filename\n");
 		exit(1);
 	}
 
@@ -163,11 +183,10 @@ int main(int argc, char *argv[])
 	/* Check for convergence condition */
 	/* This function will exit the program if the coffeicient will never converge to
 	* the needed absolute error.
-	* This is not expected to happen for this programming assignment.
 	*/
 	check_matrix();
 
-
+	find_solution();
 
 	/* Writing results to file */
 	sprintf(output, "%d.sol", num);
@@ -186,5 +205,4 @@ int main(int argc, char *argv[])
 	fclose(fp);
 
 	exit(0);
-
 }
