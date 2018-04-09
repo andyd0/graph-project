@@ -118,18 +118,16 @@ bool verifyBFSTree(Graph G, int source, int *parents) {
 
 int main(int argc, char *argv[]) {
 
-	int V = atoi(argv[1]);
-	int source = atoi(argv[2]);
-	int threads = atoi(argv[3]);
-	std::ifstream inputFile(argv[4]);
-	
-	int verify = 0;
+	std::string graph_type = argv[1];
+	std::string algorithm = argv[2];
+	int vertex_count = atoi(argv[3]);
+	int source = atoi(argv[4]);
+	int threads = atoi(argv[5]);
+	int verify = atoi(argv[6]);
+	std::ifstream inputFile(argv[7]);
 
-	if(argc == 6)
-		verify = atoi(argv[5]);
-
-	Graph G(V);
-	G.generate(inputFile);
+	Graph G(vertex_count, graph_type);
+	G.generate(inputFile, algorithm);
 
 	// int* parents = BFS(G, source);
 
