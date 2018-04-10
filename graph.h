@@ -22,6 +22,8 @@ public:
 	void addEdge(int v, int w);
 	void generate(std::ifstream &inputFile, std::string algorithm);
 	std::list<int> getAdj(int u);
+	int* getOutEdges();
+	void deleteGraph();
 };
 
 #endif

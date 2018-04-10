@@ -1,3 +1,4 @@
+#include <array>
 #include <cstdlib>
 #include <fstream>
 #include <list>
@@ -16,6 +17,9 @@ void Graph::generate(std::ifstream &inputFile, std::string algorithm) {
 
 	int u;
 	int v;
+
+	for(int i = 0; i < vertex_count; i++)
+		out_edges[i] = 0;
 
 	while(!inputFile.eof()){
 		inputFile >> u;
@@ -46,4 +50,13 @@ void Graph::addEdge(int v, int w) {
 
 std::list<int> Graph::getAdj(int u) {
 	return adj[u];
+}
+
+int* Graph::getOutEdges() {
+	return out_edges;
+}
+
+void Graph::deleteGraph() {
+	delete(adj);
+	delete(out_edges);
 }
