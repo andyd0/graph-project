@@ -21,7 +21,7 @@ void Graph::generate(std::ifstream &inputFile, std::string algorithm) {
 	for(int i = 0; i < vertex_count; i++)
 		out_edges[i] = 0;
 
-	while(!inputFile.eof()){
+	while (inputFile >> u && inputFile >> v) {
 		inputFile >> u;
 		inputFile >> v;
 		

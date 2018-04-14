@@ -1,3 +1,4 @@
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <list>
@@ -35,7 +36,7 @@ int* BFS(Graph G, int source) {
 	return parents;
 }
 
-int* BFSP(Graph G, int source, int threads) {
+int* BFS_Parallel(Graph G, int source, int threads) {
 
 	int num_vertices = G.vertexCount();
 	int* parents = new int[num_vertices];
@@ -116,26 +117,42 @@ bool verifyBFSTree(Graph G, int source, int *parents) {
 	return true;
 }
 
+void saveResultsToFile(int *pr_values, int vertex_count) {
+	std::ofstream out("bfs_tree_parents.txt");
+	
+	for (int i = 0; i < vertex_count; i++) {
+		out << "vertex " << i << " has pagerank of " << std::setprecision(10) << std::fixed
+		    << pr_values[i] << std::endl;
+	}
+};
+
 int main(int argc, char *argv[]) {
 
 	std::string graph_type = argv[1];
-	std::string algorithm = argv[2];
-	int vertex_count = atoi(argv[3]);
-	int source = atoi(argv[4]);
+	int vertex_count = atoi(argv[2]);
+	int source = atoi(argv[3]);
+	int parallel = atoi(argv[4]);
 	int threads = atoi(argv[5]);
 	int verify = atoi(argv[6]);
-	std::ifstream inputFile(argv[7]);
+	int saveTofile = atoi(argv[7]);
+	std::ifstream inputFile(argv[8]);
 
 	Graph G(vertex_count, graph_type);
-	G.generate(inputFile, algorithm);
+	G.generate(inputFile, BFS_ALGO);
 
-	// int* parents = BFS(G, source);
+	int* parents;
 
-	int* parents = BFSP(G, source, threads);
+	if(parallel) {
+		parents = BFS_Parallel(G, source, threads);
+		std::cout << "Parallel computation" << std::endl;
+	}
+	else {
+		parents = BFS(G, source);
+		std::cout << "Sequential computation" << std::endl;
+	}
 
-	// for (int i = 0; i < V; i++)
-	// 	std::cout << parents[i] << " ";
-	// std::cout << std::endl;
+	if(saveTofile)
+		saveResultsToFile(parents, vertex_count);
 
 	bool validTree = false;
 	if (verify == 1) { 
