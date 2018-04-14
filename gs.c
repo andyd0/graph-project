@@ -108,7 +108,7 @@ void find_solution(int process_rank, int comm_size, int local_num,
 	int passed = 0;
 	float *new_x = (float *)malloc(num * sizeof(float));
 
-	while (passed < 1)
+	while (passed < num)
 	{
 		passed = 0;
 
@@ -122,43 +122,68 @@ void find_solution(int process_rank, int comm_size, int local_num,
 		for (int i = 0; i < local_num; i++)
 		{
 			int global_i = i + (process_rank * local_num);
+			local_x[i] = local_b[i];
+
+			// if(process_rank == 1) {
+			// 	for(int i = 0; i < num; i++) 
+			// 		printf("i %d x[i] %f\n", i, x[i]);
+			// }
+
+			// if(process_rank == 1) {
+			// 	printf("rank %d and i: %d and b: %f and local_x[i]: %f\n", process_rank, global_i, local_b[i], local_x[i]);
+			// 	for(int i = 0; i < num; i++) {
+			// 		printf("local_a: %f\n", local_a[i]);
+			// 	}
+			// }
+
+			// printf("rank %d and i %d\n", process_rank, i);
 
 			// Avoiding the diagonals with two loops without
 			// the use of an if check
 			// Checks bottom triangle of matrix
-			for (int j = 0; j < global_i; j++)
-				local_x[i] -= (local_a[(i * num) + global_i] * x[j]);
+			for (int j = 0; j < global_i; j++) { 
+				local_x[i] -= (local_a[(i * num) + j] * x[j]);
+ 			}
+			// if(process_rank == 1) printf("%f\n", local_x[i]);
+			// Checks top triangle of matrix
+			for (int j = global_i + 1; j < num; j++) { 
+				local_x[i] -= (local_a[(i * num) + j] * x[j]);
+				// if(process_rank == 0)
+				// 	printf("NIT %d and rank %d and x local %f and a local %f and x[j] %f\n", nit, process_rank, local_x[i], local_a[(i * num) + j], x[j]);
+			}
 
-			// And then checks top triangle of matrix
-			for (int j = global_i + 1; j < num; j++)
-				local_x[i] -= (local_a[(i * num) + global_i] * x[j]);
+			// // if(process_rank == 1) printf("%f\n", local_x[i]);
 
-			local_x[i] = (local_b[i] - local_x[i]) / local_a[(i * num) + global_i];
+			local_x[i] = local_x[i]/local_a[(i * num) + global_i];
+//			printf("NIT %d and rank %d and x local %f and divisor %f\n", nit, process_rank, local_x[i], local_a[(i * num) + global_i]);
 		}
 
-		if(process_rank == 1) {
-			for(int i = 0; i < local_num; i++)
-				printf("%f\n", local_x[i]);
-			for(int i = 0; i < num; i++)
-				printf("%f\n", x[i]);
-		}
+		// if(process_rank == 1) {
+		// 	for(int i = 0; i < local_num; i++)
+		// 		printf("%f\n", local_x[i]);
+		// 	for(int i = 0; i < num; i++)
+		// 		printf("%f\n", x[i]);
+		// }
 
-		// MPI_Allgather(local_x, local_num, MPI_FLOAT, new_x, local_num,
-		// 			  MPI_FLOAT, MPI_COMM_WORLD);
+		MPI_Allgather(local_x, local_num, MPI_FLOAT, new_x, local_num,
+					  MPI_FLOAT, MPI_COMM_WORLD);
 
 		// Checking to see if error is below the threshold for all
 		// the new values of x.
-		// for (int i = 0; i < num; i++)
-		// {
-		// 	if (fabs((new_x[i] - x[i]) / new_x[i]) <= err) passed++;
-		// }
+		for (int i = 0; i < num; i++)
+		{
+			if (fabs((new_x[i] - x[i]) / new_x[i]) <= err) passed++;
+		}
 
 		float* temp = x;
 		x = new_x;
 		new_x = temp;
 
+		// for(int k = 0; k < num; k++)
+		// 	printf("rank %d and x %f and k %d and nit %d\n", process_rank, x[k], k, nit);
+
 		nit++;
-		passed++;
+		// passed++;
 	}
 }
 
@@ -216,11 +241,6 @@ int main(int argc, char *argv[])
 	MPI_Bcast(x, num, MPI_INT, 0, MPI_COMM_WORLD);
 
 	float* local_x = (float *)malloc(num * sizeof(float));
-	if(process_rank == 1) {
-		for(int i = 0; i < local_num; i++)
-			printf("%f\n", local_x[i]);
-	}
-
 	find_solution(process_rank, comm_size, local_num, local_a, local_x, local_b);
 
 	// if(process_rank == 1) {
@@ -228,30 +248,25 @@ int main(int argc, char *argv[])
 	// 		printf("%f\n", local_b[i]);
 	// }
 
+	/* Writing results to file */
+	if(process_rank == 0) {
+		sprintf(output, "%d.sol", num);
+		fp_out = fopen(output, "w");
+		if (!fp_out)
+		{
+			printf("Cannot create the file %s\n", output);
+			exit(1);
+		}
+		printf("total number of iterations: %d\n", nit);
+
+		fclose(fp_out);
+	}	
+
 	free(local_a);
 	free(local_b);
 	free(local_x);
 	free(x);
 	MPI_Finalize();
-
-	/* Writing results to file */
-	sprintf(output, "%d.sol", num);
-	fp_out = fopen(output, "w");
-	// if (!fp)
-	// {
-	// 	printf("Cannot create the file %s\n", output);
-	// 	exit(1);
-	// }
-	// DO I FUCKING NEED THIS???? WHY CANT I STOP THIS SHIT
-	// if(process_rank == 0) {
-	// 	printf("x computed values:\n");
-	// 	for (int i = 0; i < num; i++)
-	// 		printf("%f\n", x[i]);
-	// }
-
-	// printf("total nber of iterations: %d\n", nit);
-
-	fclose(fp_out);
 
 	return(0);
 }
