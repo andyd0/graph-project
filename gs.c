@@ -190,10 +190,7 @@ void find_solution(int process_rank, int comm_size, int local_num,
 int main(int argc, char *argv[])
 {
 	FILE* fp;
-	FILE* fp_out;
 	char output[100] = "";
-
-
 
 	if (argc != 2)
 	{
@@ -243,23 +240,22 @@ int main(int argc, char *argv[])
 	float* local_x = (float *)malloc(num * sizeof(float));
 	find_solution(process_rank, comm_size, local_num, local_a, local_x, local_b);
 
-	// if(process_rank == 1) {
-	// 	for(int i = 0; i < num; i++)
-	// 		printf("%f\n", local_b[i]);
-	// }
-
 	/* Writing results to file */
 	if(process_rank == 0) {
 		sprintf(output, "%d.sol", num);
-		fp_out = fopen(output, "w");
-		if (!fp_out)
+		fp = fopen(output, "w");
+		if (!fp)
 		{
 			printf("Cannot create the file %s\n", output);
 			exit(1);
 		}
-		printf("total number of iterations: %d\n", nit);
 
-		fclose(fp_out);
+		 for(int i = 0; i < num; i++)
+   			fprintf(fp,"%f\n",x[i]);
+
+		printf("Total number of iterations: %d\n", nit);
+
+		fclose(fp);
 	}	
 
 	free(local_a);
