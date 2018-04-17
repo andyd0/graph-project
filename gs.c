@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <math.h>
+#include <mpi.h>
 
 
 /***** Globals ******/
-float **a; /* The coefficients */
+float *a; /* The coefficients */
 float *x;  /* The unknowns */
 float *b;  /* The constants */
 float err; /* The absolute relative error */
@@ -12,100 +14,78 @@ int nit = 0; /* number of iterations */
 int num = 0;  /* number of unknowns */
 
 
-			  /****** Function declarations ******/
-void check_matrix(); /* Check whether the matrix will converge */
+/****** Function declarations ******/
+void get_sendcounts(); /* Splits up local_x for each processor to handle uneven splits */
 void get_input();  /* Read input from file */
 void find_solution(); /* Does matrix vector multiplication to find solution */
 
-					  /*
-					  Checks to see if the given matrix will (diagonal dominance):
-					  1. diagonal element >= sum of all other elements of the row
-					  2. At least one diagonal element > sum of all other elements of the row
-					  */
-void check_matrix()
+
+void get_sendcounts(int process_rank, int num, int comm_size, int* send_counts, int* displs)
 {
-	int bigger = 0; /* Set to 1 if at least one diag element > sum  */
-	int i, j;
-	float sum = 0;
-	float aii = 0;
+	// calculate send counts and displacements
+    for (int i = 0; i < comm_size; i++) {
+        send_counts[i] = num / comm_size;
+    }
 
-	for (i = 0; i < num; i++)
+	int remainder = num % comm_size;
+
+	while(remainder > 0)
 	{
-		sum = 0;
-		aii = fabs(a[i][i]);
-
-		for (j = 0; j < num; j++)
-			if (j != i)
-				sum += fabs(a[i][j]);
-
-		if (aii < sum)
-		{
-			printf("The matrix will not converge.\n");
-			exit(1);
+		for(int i = 0; i < comm_size; i++) 
+		{			
+			remainder--;
+			if(remainder < 0) break;
+			send_counts[i]++;
 		}
-
-		if (aii > sum)
-			bigger++;
-
 	}
 
-	if (!bigger)
-	{
-		printf("The matrix will not converge\n");
-		exit(1);
-	}
+	displs[0] = 0;
+
+	for(int i = 1; i < comm_size; i++)
+		displs[i] = displs[i - 1] + send_counts[i - 1];
 }
 
 
 /******************************************************/
 /* Read input from file */
 /* Function will have initialized the following:
-* a[][] matrix will be filled with coefficients
+* a[] will be filled with coefficients - a flattened n*n matrix
 * x[] will contain the initial values of x
 * b[] will contain the constants
-* num will have number of variables
+* n will have nber of variables
 * err will have the absolute error that you need to reach
 */
 void get_input(char filename[])
 {
 	FILE * fp;
-	int i, j;
-
 	fp = fopen(filename, "r");
 	if (!fp)
 	{
 		printf("Cannot open file %s\n", filename);
 		exit(1);
 	}
-
+	
+	// Reading in the number of unknowns and the error
+	// rate
 	fscanf(fp, "%d ", &num);
 	fscanf(fp, "%f ", &err);
 
-	/* Now, time to allocate the matrices and vectors */
-	a = (float**)malloc(num * sizeof(float*));
+	// Allocating for a 1D array as the matrix will be flattened
+	// to a n*n array
+	a = (float *)malloc(num * num * sizeof(float));
 	if (!a)
 	{
 		printf("Cannot allocate a!\n");
 		exit(1);
 	}
 
-	for (i = 0; i < num; i++)
-	{
-		a[i] = (float *)malloc(num * sizeof(float));
-		if (!a[i])
-		{
-			printf("Cannot allocate a[%d]!\n", i);
-			exit(1);
-		}
-	}
-
+	/* Now, time to allocate the matrices and vectors */
 	x = (float *)malloc(num * sizeof(float));
 	if (!x)
 	{
 		printf("Cannot allocate x!\n");
 		exit(1);
 	}
-
 
 	b = (float *)malloc(num * sizeof(float));
 	if (!b)
@@ -114,61 +94,81 @@ void get_input(char filename[])
 		exit(1);
 	}
 
-	/* Now .. Filling the blanks */
-
 	/* The initial values of Xs */
-	for (i = 0; i < num; i++)
+	for(int i = 0; i < num; i++)
 		fscanf(fp, "%f ", &x[i]);
 
-	for (i = 0; i < num; i++)
+	// Filling the matrix into a n*n array so that it can be partitioned. 
+	// Also filling in the b array
+	for (int i = 0; i < num; i++)
 	{
-		for (j = 0; j < num; j++)
-			fscanf(fp, "%f ", &a[i][j]);
+		for (int j = 0; j < num; j++) {
+			fscanf(fp, "%f ", &a[i * num + j]);
+		}
 
 		/* reading the b element */
 		fscanf(fp, "%f ", &b[i]);
 	}
-
-	fclose(fp);
 }
 
-void find_solution()
+void find_solution(int process_rank, int comm_size, int* send_counts, int* displacements)
 {
 	int passed = 0;
 	float *new_x = (float *)malloc(num * sizeof(float));
+	float* local_x = (float *)malloc(send_counts[process_rank] * sizeof(float));
 
 	while (passed < num)
 	{
 		passed = 0;
-		for (int i = 0; i < num; i++)
-		{
-			float constant = b[i];
-			float solution = x[i];
-			float temp = 0.0;
-			float divisor = a[i][i];
 
-			for (int j = 0; j < num; j++)
-			{
-				if (j != i)
-				{
-					temp += (a[i][j] * x[j]);
-				}
+		for (int i = 0; i < send_counts[process_rank]; i++)
+		{
+			int global_i = i + displacements[process_rank];
+			local_x[i] = b[global_i];
+
+			// Avoiding the diagonal with two loops without
+			// the use of an if check
+
+			// Checks bottom triangle of matrix
+			for (int j = 0; j < global_i; j++) { 
+				local_x[i] -= (a[(global_i * num) + j] * x[j]);
+ 			}
+
+			// Checks top triangle of matrix
+			for (int j = global_i + 1; j < num; j++) { 
+				local_x[i] -= (a[(global_i * num) + j] * x[j]);
 			}
-			new_x[i] = (constant - temp) / divisor;
+			
+			// Final calculation of local_x
+			local_x[i] = local_x[i]/a[(global_i * num) + global_i];
 		}
+
+		// Gathers the local_x values from each process into new_rank
+		// which is of size num
+		MPI_Allgatherv(local_x, send_counts[process_rank], MPI_FLOAT,
+				       new_x, send_counts, displacements, MPI_FLOAT, MPI_COMM_WORLD);
+
+
+		// Checking to see if error is below the threshold for all
+		// the new values of x.
 		for (int i = 0; i < num; i++)
 		{
 			if (fabs((new_x[i] - x[i]) / new_x[i]) <= err) passed++;
-			x[i] = new_x[i];
 		}
+
+		// Swapping old and new_x for next iteration using pointers
+		// instead of iteration
+		float* temp = x;
+		x = new_x;
+		new_x = temp;
+
 		nit++;
 	}
 }
 
 int main(int argc, char *argv[])
 {
-	int i;
-	FILE * fp;
+	FILE* fp;
 	char output[100] = "";
 
 	if (argc != 2)
@@ -177,32 +177,47 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	int comm_size;
+	int process_rank;
+
+	MPI_Init(NULL, NULL);
+	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+	MPI_Comm_rank(MPI_COMM_WORLD, &process_rank);
+
 	/* Read the input file and fill the global data structure above */
 	get_input(argv[1]);
 
-	/* Check for convergence condition */
-	/* This function will exit the program if the coffeicient will never converge to
-	* the needed absolute error.
-	*/
-	check_matrix();
+	int* send_counts = (int *)malloc(num * sizeof(int));
+	int* displacements = (int *)malloc(num * sizeof(int));
+	get_sendcounts(process_rank, num, comm_size, send_counts, displacements);
 
-	find_solution();
+	find_solution(process_rank, comm_size, send_counts, displacements);
 
 	/* Writing results to file */
-	sprintf(output, "%d.sol", num);
-	fp = fopen(output, "w");
-	if (!fp)
-	{
-		printf("Cannot create the file %s\n", output);
-		exit(1);
-	}
+	if(process_rank == 0) {
+		sprintf(output, "%d.sol", num);
+		fp = fopen(output, "w");
+		if (!fp)
+		{
+			printf("Cannot create the file %s\n", output);
+			exit(1);
+		}
 
-	for (i = 0; i < num; i++)
-		fprintf(fp, "%f\n", x[i]);
+		 for(int i = 0; i < num; i++)
+   			fprintf(fp,"%f\n",x[i]);
 
-	printf("total number of iterations: %d\n", nit);
+		printf("Total number of iterations: %d\n", nit);
 
-	fclose(fp);
+		fclose(fp);
+	}	
 
-	exit(0);
+	free(a);
+	free(b);
+	free(x);
+	free(send_counts);
+	free(displacements);
+	
+	MPI_Finalize();
+
+	return(0);
 }
