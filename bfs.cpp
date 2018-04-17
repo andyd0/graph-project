@@ -1,6 +1,6 @@
+#include <ctime>
 #include <iomanip>
 #include <iostream>
-#include <limits>
 #include <list>
 #include <omp.h>
 #include <queue>
@@ -14,10 +14,9 @@ int* BFS(Graph G, int source) {
 
 	int num_vertices = G.vertexCount();
 	int* parents = new int[num_vertices];
-	int maxInt = std::numeric_limits<int>::max();
 
 	for (int i = 0; i < num_vertices; i++)
-		parents[i] = maxInt;
+		parents[i] = -1;
 
 	parents[source] = 0;
 	std::queue<int> currentFrontier;
@@ -27,7 +26,7 @@ int* BFS(Graph G, int source) {
 		int u = currentFrontier.front();
 		currentFrontier.pop();
 		for (int v : G.getAdj(u)) {
-			if (parents[v] == maxInt) {
+			if (parents[v] == -1) {
 				parents[v] = u;
 				currentFrontier.push(v);
 			}
@@ -40,10 +39,9 @@ int* BFS_Parallel(Graph G, int source, int threads) {
 
 	int num_vertices = G.vertexCount();
 	int* parents = new int[num_vertices];
-	int maxInt = std::numeric_limits<int>::max();
 
 	for (int i = 0; i < num_vertices; i++)
-		parents[i] = maxInt;
+		parents[i] = -1;
 
 	parents[source] = 0;
 	std::queue<int> currentFrontier;
@@ -67,7 +65,7 @@ int* BFS_Parallel(Graph G, int source, int threads) {
 			}
 
 			for (int v : G.getAdj(u)) {
-				if (parents[v] == maxInt) {
+				if (parents[v] == -1) {
 					parents[v] = u;
 					# pragma omp critical
 					{
@@ -117,12 +115,10 @@ bool verifyBFSTree(Graph G, int source, int *parents) {
 	return true;
 }
 
-void saveResultsToFile(int *pr_values, int vertex_count) {
+void saveResultsToFile(int* parents, int vertex_count) {
 	std::ofstream out("bfs_tree_parents.txt");
-	
 	for (int i = 0; i < vertex_count; i++) {
-		out << "vertex " << i << " has pagerank of " << std::setprecision(10) << std::fixed
-		    << pr_values[i] << std::endl;
+		out << "vertex " << i << " has parent " << parents[i] << std::endl;
 	}
 };
 
@@ -140,19 +136,25 @@ int main(int argc, char *argv[]) {
 	Graph G(vertex_count, graph_type);
 	G.generate(inputFile, BFS_ALGO);
 
+	printf("Time to process graph: %fms\n", G.getTimeToGenerate());
+
+	std::clock_t start;
+	start = std::clock();
+	std::string process_type = "";
+
 	int* parents;
 
 	if(parallel) {
 		parents = BFS_Parallel(G, source, threads);
-		std::cout << "Parallel computation" << std::endl;
+		process_type = "parallel";
 	}
 	else {
 		parents = BFS(G, source);
-		std::cout << "Sequential computation" << std::endl;
+		process_type = "sequential";
 	}
-
-	if(saveTofile)
-		saveResultsToFile(parents, vertex_count);
+	
+	printf("Time to BFS (%s): %fms \n", process_type.c_str(), 
+		   (std::clock() - start ) / (double) CLOCKS_PER_SEC / 1000);
 
 	bool validTree = false;
 	if (verify == 1) { 
@@ -160,6 +162,9 @@ int main(int argc, char *argv[]) {
 		std::string test = (validTree) ? "True" : "False";
 		std::cout << "Valid tree?: " << test << std::endl;
 	}
+
+	if(saveTofile)
+		saveResultsToFile(parents, vertex_count);
 
 	delete(parents);
 }

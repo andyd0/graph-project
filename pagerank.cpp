@@ -126,14 +126,23 @@ int main(int argc, char *argv[]) {
 
 	double* pr_values;
 
+	printf("Time to process graph: %fms\n", G.getTimeToGenerate());
+
+	std::clock_t start_propcess;
+	start_propcess = std::clock();
+	std::string process_type = "";
+
 	if(parallel) {
 		pr_values = PR_Parallel(G, iterations, threads);
-		std::cout << "Parallel computation" << std::endl;
+		process_type = "parallel";
 	}
 	else {
 		pr_values = PR(G, iterations);
-		std::cout << "Sequential computation" << std::endl;
+		process_type = "sequential";
 	}
+
+	printf("Time to BFS (%s): %fms \n", process_type.c_str(), 
+		   (std::clock() - start_propcess ) / (double) CLOCKS_PER_SEC / 1000);
 
 	if(saveTofile)
 		saveResultsToFile(pr_values, vertex_count);
