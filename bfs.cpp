@@ -136,10 +136,9 @@ int main(int argc, char *argv[]) {
 	Graph G(vertex_count, graph_type);
 	G.generate(inputFile, BFS_ALGO);
 
-	printf("Time to process graph: %fms\n", G.getTimeToGenerate());
+	printf("Time to process graph: %fs\n", G.getTimeToGenerate());
 
-	std::clock_t start;
-	start = std::clock();
+	double start_process = omp_get_wtime();
 	std::string process_type = "";
 
 	int* parents;
@@ -153,8 +152,8 @@ int main(int argc, char *argv[]) {
 		process_type = "sequential";
 	}
 	
-	printf("Time to BFS for Parents (%s): %fms \n", process_type.c_str(), 
-		   (std::clock() - start ) / (double) CLOCKS_PER_SEC / 1000);
+	printf("Time to BFS for Parents (%s): %fs \n", process_type.c_str(), 
+		   omp_get_wtime() - start_process);
 
 	bool validTree = false;
 	if (verify == 1) { 

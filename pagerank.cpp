@@ -126,10 +126,9 @@ int main(int argc, char *argv[]) {
 
 	double* pr_values;
 
-	printf("Time to process graph: %fms\n", G.getTimeToGenerate());
+	printf("Time to process graph: %fs\n", G.getTimeToGenerate());
 
-	std::clock_t start_propcess;
-	start_propcess = std::clock();
+	double start_process = omp_get_wtime();
 	std::string process_type = "";
 
 	if(parallel) {
@@ -141,8 +140,8 @@ int main(int argc, char *argv[]) {
 		process_type = "sequential";
 	}
 
-	printf("Time to compute Pagerank (%s): %fms \n", process_type.c_str(), 
-		   (std::clock() - start_propcess ) / (double) CLOCKS_PER_SEC / 1000);
+	printf("Time to compute Pagerank (%s): %fs \n", process_type.c_str(), 
+		   omp_get_wtime() - start_process);
 
 	if(saveTofile)
 		saveResultsToFile(pr_values, vertex_count);

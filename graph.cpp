@@ -40,8 +40,8 @@ void Graph::generate(std::ifstream &inputFile, std::string algorithm) {
 			out_edges[v]++;
 		}
 	}
-	time_to_generate = ( std::clock() - start ) / (double) CLOCKS_PER_SEC / 1000;
-}
+	time_to_generate = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+}  					  
 
 int Graph::vertexCount() {
 	return vertex_count;
