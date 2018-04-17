@@ -15,6 +15,7 @@ class Graph {
 	std::string graph_type;
 	std::list<int> *adj;
 	int *out_edges;
+	double time_to_generate;
 
 public:
 	Graph(int vertex_count, std::string graph_type);
@@ -23,7 +24,7 @@ public:
 	void generate(std::ifstream &inputFile, std::string algorithm);
 	std::list<int> getAdj(int u);
 	int* getOutEdges();
-	void deleteGraph();
+	double getTimeToGenerate();
 };
 
 #endif

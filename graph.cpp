@@ -1,5 +1,6 @@
 #include <array>
 #include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <list>
 #include <sstream>
@@ -18,13 +19,14 @@ void Graph::generate(std::ifstream &inputFile, std::string algorithm) {
 	int u;
 	int v;
 
+	std::clock_t start;
+	start = std::clock();
+
 	for(int i = 0; i < vertex_count; i++)
 		out_edges[i] = 0;
 
 	while (inputFile >> u && inputFile >> v) {
-		inputFile >> u;
-		inputFile >> v;
-		
+
 		// If the algorithm is Pagerank, the vertices should be flipped
 		// to account for incoming edges.  Still out edges should be
 		// tracked regardless due to computation
@@ -38,6 +40,7 @@ void Graph::generate(std::ifstream &inputFile, std::string algorithm) {
 			out_edges[v]++;
 		}
 	}
+	time_to_generate = ( std::clock() - start ) / (double) CLOCKS_PER_SEC / 1000;
 }
 
 int Graph::vertexCount() {
@@ -56,7 +59,6 @@ int* Graph::getOutEdges() {
 	return out_edges;
 }
 
-void Graph::deleteGraph() {
-	delete(adj);
-	delete(out_edges);
+double Graph::getTimeToGenerate() {
+	return time_to_generate;
 }
