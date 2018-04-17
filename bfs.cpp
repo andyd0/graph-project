@@ -153,7 +153,7 @@ int main(int argc, char *argv[]) {
 		process_type = "sequential";
 	}
 	
-	printf("Time to BFS (%s): %fms \n", process_type.c_str(), 
+	printf("Time to BFS for Parents (%s): %fms \n", process_type.c_str(), 
 		   (std::clock() - start ) / (double) CLOCKS_PER_SEC / 1000);
 
 	bool validTree = false;

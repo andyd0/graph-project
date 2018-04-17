@@ -141,7 +141,7 @@ int main(int argc, char *argv[]) {
 		process_type = "sequential";
 	}
 
-	printf("Time to BFS (%s): %fms \n", process_type.c_str(), 
+	printf("Time to compute Pagerank (%s): %fms \n", process_type.c_str(), 
 		   (std::clock() - start_propcess ) / (double) CLOCKS_PER_SEC / 1000);
 
 	if(saveTofile)
