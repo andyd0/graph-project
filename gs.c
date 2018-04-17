@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <math.h>
 #include <mpi.h>
 
@@ -14,8 +15,35 @@ int num = 0;  /* number of unknowns */
 
 
 /****** Function declarations ******/
+void get_sendcounts(); /* Splits up local_x for each processor to handle uneven splits */
 void get_input();  /* Read input from file */
 void find_solution(); /* Does matrix vector multiplication to find solution */
+
+
+void get_sendcounts(int process_rank, int num, int comm_size, int* send_counts, int* displs)
+{
+	// calculate send counts and displacements
+    for (int i = 0; i < comm_size; i++) {
+        send_counts[i] = num / comm_size;
+    }
+
+	int remainder = num % comm_size;
+
+	while(remainder > 0)
+	{
+		for(int i = 0; i < comm_size; i++) 
+		{			
+			remainder--;
+			if(remainder < 0) break;
+			send_counts[i]++;
+		}
+	}
+
+	displs[0] = 0;
+
+	for(int i = 1; i < comm_size; i++)
+		displs[i] = displs[i - 1] + send_counts[i - 1];
+}
 
 
 /******************************************************/
@@ -27,146 +55,99 @@ void find_solution(); /* Does matrix vector multiplication to find solution */
 * n will have nber of variables
 * err will have the absolute error that you need to reach
 */
-void get_input(FILE* fp, int process_rank, int comm_size, 
-			   int local_num, float* local_a, float* local_b)
+void get_input(char filename[])
 {
-	if(process_rank == 0)
+	FILE * fp;
+	fp = fopen(filename, "r");
+	if (!fp)
 	{
-		// Allocating for a 1D array as the matrix will be flattened
-		// to a n*n array
-		a = (float *)malloc(num * num * sizeof(float));
-		if (!a)
-		{
-			printf("Cannot allocate a!\n");
-			exit(1);
-		}
-
-		/* Now, time to allocate the matrices and vectors */
-		x = (float *)malloc(num * sizeof(float));
-		if (!x)
-		{
-			printf("Cannot allocate x!\n");
-			exit(1);
-		}
-
-		b = (float *)malloc(num * sizeof(float));
-		if (!b)
-		{
-			printf("Cannot allocate b!\n");
-			exit(1);
-		}
-
-		/* The initial values of Xs */
-		for(int i = 0; i < num; i++)
-			fscanf(fp, "%f ", &x[i]);
-
-		// Filling the matrix into a n*n array so that it can be partitioned. 
-		// Also filling in the b array
-		for (int i = 0; i < num; i++)
-		{
-			for (int j = 0; j < num; j++) {
-				fscanf(fp, "%f ", &a[i * num + j]);
-			}
-
-			/* reading the b element */
-			fscanf(fp, "%f ", &b[i]);
-		}
-
-		// Scatter the rows of the matrix A, elements of vector x, 
-		// and elements of the vector b by blocks to available processes
-		MPI_Scatter(a, num * local_num, MPI_FLOAT,
-				    local_a, num * local_num, MPI_FLOAT,
-					0, MPI_COMM_WORLD);
-
-		// Scatter the matching elements of x
-		MPI_Scatter(b, local_num, MPI_FLOAT,
-				    local_b, local_num, MPI_FLOAT,
-					0, MPI_COMM_WORLD);
-
-		free(a);
-		free(b);
-		fclose(fp);
+		printf("Cannot open file %s\n", filename);
+		exit(1);
 	}
-	else
-	{ 
-		// Scatter the rows of the matrix A, elements of vector x, 
-		// and elements of the vector b by blocks to available processes
-		MPI_Scatter(a, num * local_num, MPI_FLOAT,
-				    local_a, num * local_num, MPI_FLOAT,
-					0, MPI_COMM_WORLD);
+	
+	// Reading in the number of unknowns and the error
+	// rate
+	fscanf(fp, "%d ", &num);
+	fscanf(fp, "%f ", &err);
 
-		// Scatter the matching elements of x
-		MPI_Scatter(b, local_num, MPI_FLOAT,
-				    local_b, local_num, MPI_FLOAT,
-					0, MPI_COMM_WORLD);
+	// Allocating for a 1D array as the matrix will be flattened
+	// to a n*n array
+	a = (float *)malloc(num * num * sizeof(float));
+	if (!a)
+	{
+		printf("Cannot allocate a!\n");
+		exit(1);
+	}
+
+	/* Now, time to allocate the matrices and vectors */
+	x = (float *)malloc(num * sizeof(float));
+	if (!x)
+	{
+		printf("Cannot allocate x!\n");
+		exit(1);
+	}
+
+	b = (float *)malloc(num * sizeof(float));
+	if (!b)
+	{
+		printf("Cannot allocate b!\n");
+		exit(1);
+	}
+
+	/* The initial values of Xs */
+	for(int i = 0; i < num; i++)
+		fscanf(fp, "%f ", &x[i]);
+
+	// Filling the matrix into a n*n array so that it can be partitioned. 
+	// Also filling in the b array
+	for (int i = 0; i < num; i++)
+	{
+		for (int j = 0; j < num; j++) {
+			fscanf(fp, "%f ", &a[i * num + j]);
+		}
+
+		/* reading the b element */
+		fscanf(fp, "%f ", &b[i]);
 	}
 }
 
-void find_solution(int process_rank, int comm_size, int local_num,
-				   float* local_a, float* local_x, float* local_b)
+void find_solution(int process_rank, int comm_size, int* send_counts, int* displacements)
 {
 	int passed = 0;
 	float *new_x = (float *)malloc(num * sizeof(float));
+	float* local_x = (float *)malloc(send_counts[process_rank] * sizeof(float));
 
 	while (passed < num)
 	{
 		passed = 0;
 
-		// printf("local_num:\n");
-		// printf("%d\n", local_num);
-		// printf("process_rank:\n");
-		// printf("%d\n", process_rank);
-		// printf("comm size:\n");
-		// printf("%d\n", comm_size);
-
-		for (int i = 0; i < local_num; i++)
+		for (int i = 0; i < send_counts[process_rank]; i++)
 		{
-			int global_i = i + (process_rank * local_num);
-			local_x[i] = local_b[i];
+			int global_i = i + displacements[process_rank];
+			local_x[i] = b[global_i];
 
-			// if(process_rank == 1) {
-			// 	for(int i = 0; i < num; i++) 
-			// 		printf("i %d x[i] %f\n", i, x[i]);
-			// }
-
-			// if(process_rank == 1) {
-			// 	printf("rank %d and i: %d and b: %f and local_x[i]: %f\n", process_rank, global_i, local_b[i], local_x[i]);
-			// 	for(int i = 0; i < num; i++) {
-			// 		printf("local_a: %f\n", local_a[i]);
-			// 	}
-			// }
-
-			// printf("rank %d and i %d\n", process_rank, i);
-
-			// Avoiding the diagonals with two loops without
+			// Avoiding the diagonal with two loops without
 			// the use of an if check
+
 			// Checks bottom triangle of matrix
 			for (int j = 0; j < global_i; j++) { 
-				local_x[i] -= (local_a[(i * num) + j] * x[j]);
+				local_x[i] -= (a[(global_i * num) + j] * x[j]);
  			}
-			// if(process_rank == 1) printf("%f\n", local_x[i]);
+
 			// Checks top triangle of matrix
 			for (int j = global_i + 1; j < num; j++) { 
-				local_x[i] -= (local_a[(i * num) + j] * x[j]);
-				// if(process_rank == 0)
-				// 	printf("NIT %d and rank %d and x local %f and a local %f and x[j] %f\n", nit, process_rank, local_x[i], local_a[(i * num) + j], x[j]);
+				local_x[i] -= (a[(global_i * num) + j] * x[j]);
 			}
-
-			// // if(process_rank == 1) printf("%f\n", local_x[i]);
-
-			local_x[i] = local_x[i]/local_a[(i * num) + global_i];
-//			printf("NIT %d and rank %d and x local %f and divisor %f\n", nit, process_rank, local_x[i], local_a[(i * num) + global_i]);
+			
+			// Final calculation of local_x
+			local_x[i] = local_x[i]/a[(global_i * num) + global_i];
 		}
 
-		// if(process_rank == 1) {
-		// 	for(int i = 0; i < local_num; i++)
-		// 		printf("%f\n", local_x[i]);
-		// 	for(int i = 0; i < num; i++)
-		// 		printf("%f\n", x[i]);
-		// }
+		// Gathers the local_x values from each process into new_rank
+		// which is of size num
+		MPI_Allgatherv(local_x, send_counts[process_rank], MPI_FLOAT,
+				       new_x, send_counts, displacements, MPI_FLOAT, MPI_COMM_WORLD);
 
-		MPI_Allgather(local_x, local_num, MPI_FLOAT, new_x, local_num,
-					  MPI_FLOAT, MPI_COMM_WORLD);
 
 		// Checking to see if error is below the threshold for all
 		// the new values of x.
@@ -175,15 +156,13 @@ void find_solution(int process_rank, int comm_size, int local_num,
 			if (fabs((new_x[i] - x[i]) / new_x[i]) <= err) passed++;
 		}
 
+		// Swapping old and new_x for next iteration using pointers
+		// instead of iteration
 		float* temp = x;
 		x = new_x;
 		new_x = temp;
 
-		// for(int k = 0; k < num; k++)
-		// 	printf("rank %d and x %f and k %d and nit %d\n", process_rank, x[k], k, nit);
-
 		nit++;
-		// passed++;
 	}
 }
 
@@ -198,47 +177,21 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	fp = fopen(argv[1], "r");
-	if (!fp)
-	{
-		printf("Cannot open file %s\n", argv[1]);
-		exit(1);
-	}
-
-	// Reading in the number of unknowns and the error
-	// rate
-	fscanf(fp, "%d ", &num);
-	fscanf(fp, "%f ", &err);
-
 	int comm_size;
 	int process_rank;
-	int local_num;
-
-	// Used for partitioning the inputs for each 
-	// process
-	float* local_a = (float *)malloc(num * num * sizeof(float));
-	float* local_b = (float *)malloc(num * sizeof(float));
 
 	MPI_Init(NULL, NULL);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &process_rank);
 
-	MPI_Bcast(&num, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&err, 1, MPI_FLOAT, 0, MPI_COMM_WORLD);
-
-	local_num = num / comm_size;
-
 	/* Read the input file and fill the global data structure above */
-	get_input(fp, process_rank, comm_size, local_num, local_a, local_b);
+	get_input(argv[1]);
 
-	if(process_rank != 0) {
-		x = (float *)malloc(num * sizeof(float));
-	}
+	int* send_counts = (int *)malloc(num * sizeof(int));
+	int* displacements = (int *)malloc(num * sizeof(int));
+	get_sendcounts(process_rank, num, comm_size, send_counts, displacements);
 
-	MPI_Bcast(x, num, MPI_INT, 0, MPI_COMM_WORLD);
-
-	float* local_x = (float *)malloc(num * sizeof(float));
-	find_solution(process_rank, comm_size, local_num, local_a, local_x, local_b);
+	find_solution(process_rank, comm_size, send_counts, displacements);
 
 	/* Writing results to file */
 	if(process_rank == 0) {
@@ -258,10 +211,12 @@ int main(int argc, char *argv[])
 		fclose(fp);
 	}	
 
-	free(local_a);
-	free(local_b);
-	free(local_x);
+	free(a);
+	free(b);
 	free(x);
+	free(send_counts);
+	free(displacements);
+	
 	MPI_Finalize();
 
 	return(0);
