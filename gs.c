@@ -15,14 +15,15 @@ int num = 0;  /* number of unknowns */
 
 
 /****** Function declarations ******/
-void get_sendcounts(); /* Splits up local_x for each processor to handle uneven splits */
+void get_sendcounts(); 
 void get_input();  /* Read input from file */
 void find_solution(); /* Does matrix vector multiplication to find solution */
 
-
+// This computes the number of equations each process will work on and the displacements needed
+// by Allgatherv used in the find solution function. Jobs may be split up evenly or some processors
+// may get more work depending on the remainder from num % comm_size
 void get_sendcounts(int process_rank, int num, int comm_size, int* send_counts, int* displs)
 {
-	// calculate send counts and displacements
     for (int i = 0; i < comm_size; i++) {
         send_counts[i] = num / comm_size;
     }
@@ -111,6 +112,7 @@ void get_input(char filename[])
 	}
 }
 
+
 void find_solution(int process_rank, int comm_size, int* send_counts, int* displacements)
 {
 	int passed = 0;
@@ -166,6 +168,7 @@ void find_solution(int process_rank, int comm_size, int* send_counts, int* displ
 	}
 }
 
+
 int main(int argc, char *argv[])
 {
 	FILE* fp;
@@ -180,6 +183,7 @@ int main(int argc, char *argv[])
 	int comm_size;
 	int process_rank;
 
+	// Setting up MPI
 	MPI_Init(NULL, NULL);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &process_rank);
@@ -187,10 +191,13 @@ int main(int argc, char *argv[])
 	/* Read the input file and fill the global data structure above */
 	get_input(argv[1]);
 
+	// Getting send counts and displacements for the processors to refer to
+	// in Allgatherv
 	int* send_counts = (int *)malloc(num * sizeof(int));
 	int* displacements = (int *)malloc(num * sizeof(int));
 	get_sendcounts(process_rank, num, comm_size, send_counts, displacements);
 
+	// Compute the solutions
 	find_solution(process_rank, comm_size, send_counts, displacements);
 
 	/* Writing results to file */
