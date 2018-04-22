@@ -12,21 +12,18 @@
 
 class Graph {
 	int vertex_count;
-	int** adj;
-	int* out_edges;
-	int* in_edges;
+	std::string graph_type;
+	std::list<int> *adj;
+	int *out_edges;
 	double time_to_generate;
 
 public:
-	Graph(int vertex_count);
+	Graph(int vertex_count, std::string graph_type);
 	int vertexCount();
-
+	void addEdge(int v, int w);
 	void generate(std::ifstream &inputFile, std::string algorithm);
-	int* getAdjList(int u);
-	int getFromAdjList(int u, int i);
-	int getOutEdges(int u);
-	int* getOutEdgesArray();
-	int* getInEdgesArray();
+	std::list<int> getAdj(int u);
+	int* getOutEdges();
 	double getTimeToGenerate();
 };
 
