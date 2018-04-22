@@ -8,7 +8,7 @@
 #include <string>
 #include "graph.h"
 
-double* PR(Graph G, int iterations) {
+double* PR(Graph G, int iterations, double damping_factor) {
 
 	int vertex_count = G.vertexCount();
 
@@ -22,21 +22,21 @@ double* PR(Graph G, int iterations) {
 		pr_values[i] = pr_initial;
 		pr_temp[i] = 0;
 	}
-		
+
 	int current = 0;
-	double damping_factor = .80;
 	double adj = (1 - damping_factor) / (double)vertex_count;
-	int *out_edges = G.getOutEdges();
+	int* out_edge_counts = G.getOutEdgesArray();
+	int* in_edge_counts = G.getInEdgesArray();
 
 	while (current < iterations) {
 
-		for (int i = 0; i < vertex_count; i++) {
-			std::list<int> incoming = G.getAdj(i);
-			std::list<int>::iterator it;
-			for (it = incoming.begin(); it != incoming.end(); ++it) {
-				pr_temp[i] += pr_values[*it] / out_edges[*it];
+		for (int u = 0; u < vertex_count; u++) {
+			int* incoming = G.getAdjList(u);
+			for (int j = 0; j < in_edge_counts[u]; j++) {
+				int v = incoming[j];
+				pr_temp[u] += pr_values[v] / out_edge_counts[v];
 			}
-			pr_temp[i] = pr_temp[i] * damping_factor + adj;
+			pr_temp[u] = pr_temp[u] * damping_factor + adj;
 		}
 
 		for (int i = 0; i < vertex_count; i++) {
@@ -51,7 +51,7 @@ double* PR(Graph G, int iterations) {
 	return pr_values;
 }
 
-double* PR_Parallel(Graph G, int iterations, int threads) {
+double* PR_Parallel(Graph G, int iterations, double damping_factor, int threads) {
 
 	int vertex_count = G.vertexCount();
 
@@ -61,30 +61,31 @@ double* PR_Parallel(Graph G, int iterations, int threads) {
 
 	double pr_initial = 1 / (double)vertex_count;
 
+	# pragma omp parallel for
 	for (int i = 0; i < vertex_count; i++) {
 		pr_values[i] = pr_initial;
 		pr_temp[i] = 0;
 	}
-		
+
 	int current = 0;
-	double damping_factor = .80;
 	double adj = (1 - damping_factor) / (double)vertex_count;
-	int *out_edges = G.getOutEdges();
+	int* out_edge_counts = G.getOutEdgesArray();
+	int* in_edge_counts = G.getInEdgesArray();
 
 	while (current < iterations) {
 
 		omp_set_num_threads(threads);
 		# pragma omp parallel for
-		for (int i = 0; i < vertex_count; i++) {
-			std::list<int> incoming = G.getAdj(i);
-			std::list<int>::iterator it;
-			for (it = incoming.begin(); it != incoming.end(); ++it) {
-				pr_temp[i] += pr_values[*it] / out_edges[*it];
+		for (int u = 0; u < vertex_count; u++) {
+			int* incoming = G.getAdjList(u);
+			for (int j = 0; j < in_edge_counts[u]; j++) {
+				int v = incoming[j];
+				pr_temp[u] += pr_values[v] / out_edge_counts[v];
 			}
-			pr_temp[i] = pr_temp[i] * damping_factor + adj;
+			pr_temp[u] = pr_temp[u] * damping_factor + adj;
 		}
 
-		# pragma omp barrier
+		# pragma omp parallel for
 		for (int i = 0; i < vertex_count; i++) {
 			pr_values[i] = pr_temp[i];
 			pr_temp[i] = 0;
@@ -99,52 +100,51 @@ double* PR_Parallel(Graph G, int iterations, int threads) {
 
 void saveResultsToFile(double *pr_values, int vertex_count) {
 	std::ofstream out("pagerank_values.txt");
-	
+
 	for (int i = 0; i < vertex_count; i++) {
-		out << "vertex " << i << " has pagerank of " << std::setprecision(10) << std::fixed
-		    << pr_values[i] << std::endl;
+		out << "vertex " << i << " pagerank " << std::setprecision(10) << std::fixed
+			<< pr_values[i] << std::endl;
 	}
 };
 
 int main(int argc, char *argv[]) {
 
-	std::string graph_type = argv[1];
-	int vertex_count = atoi(argv[2]);
-	int iterations = atoi(argv[3]);
+	int vertex_count = atoi(argv[1]);
+	int iterations = atoi(argv[2]);
+	double damping_factor = atof(argv[3]);
 	int parallel = atoi(argv[4]);
 	int threads = atoi(argv[5]);
 	int saveTofile = atoi(argv[6]);
 	std::ifstream inputFile(argv[7]);
 
-	if(!inputFile.good()) {
+	if (!inputFile.good()) {
 		std::cout << "\nPlease be sure to use an input file" << std::endl;
 		return 0;
 	}
 
-	Graph G(vertex_count, graph_type);
+	Graph G(vertex_count);
 	G.generate(inputFile, PR_ALGO);
 
 	double* pr_values;
 
-	printf("Time to process graph: %fms\n", G.getTimeToGenerate());
+	printf("Time to process graph: %fs\n", G.getTimeToGenerate());
 
-	std::clock_t start_propcess;
-	start_propcess = std::clock();
+	double start_process = omp_get_wtime();
 	std::string process_type = "";
 
-	if(parallel) {
-		pr_values = PR_Parallel(G, iterations, threads);
+	if (parallel) {
+		pr_values = PR_Parallel(G, iterations, damping_factor, threads);
 		process_type = "parallel";
 	}
 	else {
-		pr_values = PR(G, iterations);
+		pr_values = PR(G, iterations, damping_factor);
 		process_type = "sequential";
 	}
 
-	printf("Time to BFS (%s): %fms \n", process_type.c_str(), 
-		   (std::clock() - start_propcess ) / (double) CLOCKS_PER_SEC / 1000);
+	printf("Time to compute Pagerank (%s): %fs \n", process_type.c_str(),
+		omp_get_wtime() - start_process);
 
-	if(saveTofile)
+	if (saveTofile)
 		saveResultsToFile(pr_values, vertex_count);
 
 	delete(pr_values);
