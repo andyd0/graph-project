@@ -98,6 +98,116 @@ double* PR_Parallel(Graph G, int iterations, double damping_factor, int threads)
 	return pr_values;
 }
 
+double* PR_Parallel_Revised(Graph G, int iterations, double damping_factor, int threads) {
+
+	int vertex_count = G.vertexCount();
+
+	double* pr_values = new double[vertex_count];
+	double* pr_temp = new double[vertex_count];
+
+
+	double pr_initial = 1 / (double)vertex_count;
+
+	omp_set_num_threads(threads);
+	
+	# pragma omp parallel for
+	for (int i = 0; i < vertex_count; i++) {
+		pr_values[i] = pr_initial;
+		pr_temp[i] = 0;
+	}
+
+	int current = 0;
+	double adj = (1 - damping_factor) / (double)vertex_count;
+	int* out_edge_counts = G.getOutEdgesArray();
+	int* in_edge_counts = G.getInEdgesArray();
+	double* contributions = new double[vertex_count];
+
+	while (current < iterations) {
+
+		omp_set_num_threads(threads);
+		# pragma omp parallel for
+		for (int u = 0; u < vertex_count; u++) {
+			contributions[u] = pr_values[u] / out_edge_counts[u];
+		}
+		# pragma omp parallel for
+		for (int u = 0; u < vertex_count; u++) {
+			int* incoming = G.getAdjList(u);
+			double sum = 0.0;
+			for (int j = 0; j < in_edge_counts[u]; j++) {
+				int v = incoming[j];
+				sum += contributions[v];
+			}
+			pr_temp[u] = sum * damping_factor + adj;
+		}
+
+		# pragma omp parallel for
+		for (int i = 0; i < vertex_count; i++) {
+			pr_values[i] = pr_temp[i];
+			pr_temp[i] = 0;
+		}
+		current++;
+	}
+
+	delete(pr_temp);
+
+	return pr_values;
+}
+
+double* PR_Parallel_Rev_Scheduling(Graph G, int iterations, double damping_factor, int threads) {
+
+	int vertex_count = G.vertexCount();
+
+	double* pr_values = new double[vertex_count];
+	double* pr_temp = new double[vertex_count];
+
+
+	double pr_initial = 1 / (double)vertex_count;
+
+	omp_set_num_threads(threads);
+	
+	# pragma omp parallel for
+	for (int i = 0; i < vertex_count; i++) {
+		pr_values[i] = pr_initial;
+		pr_temp[i] = 0;
+	}
+
+	int current = 0;
+	double adj = (1 - damping_factor) / (double)vertex_count;
+	int* out_edge_counts = G.getOutEdgesArray();
+	int* in_edge_counts = G.getInEdgesArray();
+	double* contributions = new double[vertex_count];
+
+	while (current < iterations) {
+
+		omp_set_num_threads(threads);
+		# pragma omp parallel for
+		for (int u = 0; u < vertex_count; u++) {
+			contributions[u] = pr_values[u]/out_edge_counts[u];
+		}
+		# pragma omp parallel for schedule(dynamic, 64)
+		for (int u = 0; u < vertex_count; u++) {
+			int* incoming = G.getAdjList(u);
+			double sum = 0.0;
+			for (int j = 0; j < in_edge_counts[u]; j++) {
+				int v = incoming[j];
+				sum += contributions[v];
+			}
+			pr_temp[u] = sum * damping_factor + adj;
+		}
+
+		# pragma omp parallel for
+		for (int i = 0; i < vertex_count; i++) {
+			pr_values[i] = pr_temp[i];
+			pr_temp[i] = 0;
+		}
+		current++;
+	}
+
+	delete(pr_temp);
+
+	return pr_values;
+}
+
 void saveResultsToFile(double *pr_values, int vertex_count) {
 	std::ofstream out("pagerank_values.txt");
 
@@ -125,16 +235,24 @@ int main(int argc, char *argv[]) {
 	Graph G(vertex_count);
 	G.generate(inputFile, PR_ALGO);
 
-	double* pr_values;
+	double* pr_values = new double[vertex_count];
 
 	printf("Time to process graph: %fs\n", G.getTimeToGenerate());
 
 	double start_process = omp_get_wtime();
 	std::string process_type = "";
 
-	if (parallel) {
+	if(parallel == 1){
 		pr_values = PR_Parallel(G, iterations, damping_factor, threads);
 		process_type = "parallel";
+	}
+	else if (parallel == 2) {
+		pr_values = PR_Parallel_Revised(G, iterations, damping_factor, threads);
+		process_type = "parallel revised algorithm";
+	}
+	else if(parallel == 3) {
+		pr_values = PR_Parallel_Rev_Scheduling(G, iterations, damping_factor, threads);
+		process_type = "parallel revised algorithm with scheduling";
 	}
 	else {
 		pr_values = PR(G, iterations, damping_factor);
