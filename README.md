@@ -1,1 +1,1 @@
-"# solve-eq-mpi" 
+# MPI to sovlve a group of linear equations
